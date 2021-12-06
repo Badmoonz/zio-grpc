@@ -8,7 +8,7 @@ import scalapb.zio_grpc.testservice.ZioTestservice.TestServiceClient
 import scalapb.zio_grpc.testservice._
 import zio.Cause.Interrupt
 import zio.Console.printLine
-import zio.{durationInt, Fiber, FiberId, Has, Queue, URIO, ZIO, ZLayer, ZQueue}
+import zio.{durationInt, Fiber, FiberId, Queue, URIO, ZIO, ZLayer, ZQueue}
 import zio.stream.{Stream, ZStream}
 import zio.test.Assertion._
 import zio.test.TestAspect.timeout
@@ -243,7 +243,7 @@ object TestServiceSpec extends DefaultRunnableSpec {
   object BidiFixture {
     def apply[R, Req, Res](
         call: Stream[Status, Req] => ZStream[R, Status, Res]
-    ): zio.URIO[R with Has[zio.Console], BidiFixture[Req, Res]] =
+    ): zio.URIO[R with zio.Console, BidiFixture[Req, Res]] =
       for {
         in    <- ZQueue.unbounded[Res]
         out   <- ZQueue.unbounded[Option[Req]]

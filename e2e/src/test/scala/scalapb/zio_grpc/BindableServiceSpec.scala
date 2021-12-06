@@ -1,7 +1,6 @@
 package scalapb.zio_grpc
 
 import scalapb.zio_grpc.testservice.ZioTestservice.ZTestService
-import zio.Has
 import zio.Clock
 import zio.Console
 import io.grpc.Status
@@ -12,21 +11,21 @@ import io.grpc.ServerBuilder
 import zio.test._
 
 object BindableServiceSpec extends DefaultRunnableSpec {
-  implicitly[ZBindableService[Any, ZTestService[Any, Has[RequestContext]]]]
-  implicitly[ZBindableService[Any, ZTestService[Any, Has[SafeMetadata]]]]
+  implicitly[ZBindableService[Any, ZTestService[Any, RequestContext]]]
+  implicitly[ZBindableService[Any, ZTestService[Any, SafeMetadata]]]
   implicitly[ZBindableService[Any, ZTestService[Any, Any]]]
 
-  implicitly[ZBindableService[Has[Clock], ZTestService[Has[Clock], Has[RequestContext]]]]
-  implicitly[ZBindableService[Has[Clock], ZTestService[Has[Clock], Has[SafeMetadata]]]]
-  implicitly[ZBindableService[Has[Clock], ZTestService[Has[Clock], Any]]]
+  implicitly[ZBindableService[Clock, ZTestService[Clock, RequestContext]]]
+  implicitly[ZBindableService[Clock, ZTestService[Clock, SafeMetadata]]]
+  implicitly[ZBindableService[Clock, ZTestService[Clock, Any]]]
 
   implicitly[
-    ZBindableService[Has[Clock] with Has[Console], ZTestService[Has[Clock] with Has[Console], Has[RequestContext]]]
+    ZBindableService[Clock with Console, ZTestService[Clock with Console, RequestContext]]
   ]
   implicitly[
-    ZBindableService[Has[Clock] with Has[Console], ZTestService[Has[Clock] with Has[Console], Has[SafeMetadata]]]
+    ZBindableService[Clock with Console, ZTestService[Clock with Console, SafeMetadata]]
   ]
-  implicitly[ZBindableService[Has[Clock] with Has[Console], ZTestService[Has[Clock] with Has[Console], Any]]]
+  implicitly[ZBindableService[Clock with Console, ZTestService[Clock with Console, Any]]]
 
   class UnimpTestService[P, R, C] extends ZTestService[R, C] {
     def unary(request: Request): ZIO[R with C, Status, Response] = ???
@@ -38,13 +37,13 @@ object BindableServiceSpec extends DefaultRunnableSpec {
     def bidiStreaming(request: zio.stream.ZStream[Any, Status, Request]): ZStream[R with C, Status, Response] = ???
   }
 
-  object S1 extends UnimpTestService[Int, Any, Has[RequestContext]]
-  object S2 extends UnimpTestService[Int, Any, Has[SafeMetadata]]
+  object S1 extends UnimpTestService[Int, Any, RequestContext]
+  object S2 extends UnimpTestService[Int, Any, SafeMetadata]
   object S3 extends UnimpTestService[Int, Any, Any]
-  object S4 extends UnimpTestService[Int, Has[Clock], Has[SafeMetadata]]
-  object S5 extends UnimpTestService[Int, Has[Clock], Has[RequestContext]]
-  object S6 extends UnimpTestService[Int, Has[Clock], Any]
-  object S7 extends UnimpTestService[Int, Has[Console], Any]
+  object S4 extends UnimpTestService[Int, Clock, SafeMetadata]
+  object S5 extends UnimpTestService[Int, Clock, RequestContext]
+  object S6 extends UnimpTestService[Int, Clock, Any]
+  object S7 extends UnimpTestService[Int, Console, Any]
 
   ServerLayer.fromService(ServerBuilder.forPort(9000), S1)
   ServerLayer.fromService(ServerBuilder.forPort(9000), S2)

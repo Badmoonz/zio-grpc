@@ -16,18 +16,18 @@ import zio.Clock
 object EnvSpec extends DefaultRunnableSpec with MetadataTests {
   case class User(name: String)
 
-  val getUser = ZIO.access[Has[User]](_.get)
+  val getUser = ZIO.access[User](_.get)
 
-  object ServiceWithConsole extends ZTestService[Has[Console] with Has[Clock], Has[User]] {
-    def unary(request: Request): ZIO[Has[Console] with Has[User], Status, Response] =
+  object ServiceWithConsole extends ZTestService[Console with Clock, User] {
+    def unary(request: Request): ZIO[Console with User, Status, Response] =
       for {
         user <- getUser
       } yield Response(out = user.name)
 
     def serverStreaming(
         request: Request
-    ): ZStream[Has[Console] with Has[User], Status, Response] =
-      ZStream.accessStream { (u: Has[User]) =>
+    ): ZStream[Console with User, Status, Response] =
+      ZStream.accessStream { (u: ZEnvironment[User]) =>
         ZStream(
           Response(u.get.name),
           Response(u.get.name)
@@ -36,12 +36,12 @@ object EnvSpec extends DefaultRunnableSpec with MetadataTests {
 
     def clientStreaming(
         request: zio.stream.ZStream[Any, Status, Request]
-    ): ZIO[Has[User], Status, Response] = getUser.map(n => Response(n.name))
+    ): ZIO[User, Status, Response] = getUser.map(n => Response(n.name))
 
     def bidiStreaming(
         request: zio.stream.ZStream[Any, Status, Request]
-    ): ZStream[Has[User], Status, Response] =
-      ZStream.accessStream { (u: Has[User]) =>
+    ): ZStream[User, Status, Response] =
+      ZStream.accessStream { (u: ZEnvironment[User]) =>
         ZStream(
           Response(u.get.name)
         )
@@ -63,8 +63,8 @@ object EnvSpec extends DefaultRunnableSpec with MetadataTests {
 
   val serviceLayer = ServiceWithConsole.transformContextM(parseUser(_)).toLayer
 
-  val serverLayer: ZLayer[Has[ZTestService[Any, Has[RequestContext]]], Throwable, Server] =
-    ServerLayer.access[ZTestService[Any, Has[RequestContext]]](ServerBuilder.forPort(0))
+  val serverLayer: ZLayer[ZTestService[Any, RequestContext], Throwable, Server] =
+    ServerLayer.access[ZTestService[Any, RequestContext]](ServerBuilder.forPort(0))
 
   override def clientLayer(
       userName: Option[String]

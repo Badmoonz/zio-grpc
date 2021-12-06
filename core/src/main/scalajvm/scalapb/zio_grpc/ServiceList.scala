@@ -1,7 +1,9 @@
 package scalapb.zio_grpc
 
-import zio.{Has, Tag, ZIO, ZLayer, ZManaged}
+import zio.{Tag, ZIO, ZLayer, ZManaged}
 import io.grpc.ServerServiceDefinition
+import zio.IsNotIntersection
+import zio.ZEnvironment
 
 /** Represents a managed list of services to be added to the a server.
   *
@@ -28,18 +30,18 @@ sealed class ServiceList[-RR] private[scalapb] (val bindAll: ZManaged[RR, Throwa
     } yield sd :: l)
 
   /** Adds a dependency on a service that will be provided later from the environment or a Layer * */
-  def access[B: Tag](implicit bs: ZBindableService[Any, B]): ServiceList[Has[B] with RR] =
+  def access[B: IsNotIntersection: Tag](implicit bs: ZBindableService[Any, B]): ServiceList[B with RR] =
     accessEnv[Any, B]
 
-  def accessEnv[R, B: Tag](implicit bs: ZBindableService[R, B]): ServiceList[R with Has[B] with RR] =
-    new ServiceList(ZManaged.accessManaged[R with Has[B] with RR] { r =>
+  def accessEnv[R, B: IsNotIntersection: Tag](implicit bs: ZBindableService[R, B]): ServiceList[R with B with RR] =
+    new ServiceList(ZManaged.environmentWithManaged[R with B with RR] { r =>
       bindAll.mapZIO(ll => bs.bindService(r.get[B]).map(_ :: ll))
     })
 
-  def provide(r: RR): ServiceList[Any] = new ServiceList[Any](bindAll.provide(r))
+  def provideEnvironment(r: => ZEnvironment[RR]): ServiceList[Any] = new ServiceList[Any](bindAll.provideEnvironment(r))
 
   def provideLayer[R1 <: RR](layer: ZLayer[Any, Throwable, R1]): ServiceList[Any] =
-    new ServiceList[Any](bindAll.provideLayer(layer))
+    new ServiceList[Any](bindAll.provide(layer))
 }
 
 object ServiceList extends ServiceList(ZManaged.succeed(Nil)) {

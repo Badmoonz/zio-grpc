@@ -16,7 +16,7 @@ object CallDriverSpec extends DefaultRunnableSpec {
         .foreachParNDiscard(128)(List.range(0, 16))(i =>
           for {
             delay <- nextIntBetween(100, 200)
-            _     <- environment.live(sleep(delay.milliseconds))
+            _     <- ClockLive.sleep(delay.milliseconds)
             _     <- ZIO.fail(Status.INVALID_ARGUMENT.withDescription(s"i=$i"))
           } yield ()
         )

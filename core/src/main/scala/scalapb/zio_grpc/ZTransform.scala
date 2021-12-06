@@ -2,8 +2,9 @@ package scalapb.zio_grpc
 
 import zio.ZIO
 import zio.stream.ZStream
-import zio.Has
 import zio.Tag
+import zio.ZEnvironment
+import zio.IsNotIntersection
 
 /** Describes a transformation of an effect or a stream.
   *
@@ -32,33 +33,41 @@ trait ZTransform[+RIn, E, -ROut] { self =>
 object ZTransform {
 
   /** Returns a ZTransform that can provide some of the environment of a service */
-  def provideSome[RIn, E, ROut](f: ROut => RIn): ZTransform[RIn, E, ROut] =
+  def provideSomeEnvironment[RIn, E, ROut](f: ZEnvironment[ROut] => ZEnvironment[RIn]): ZTransform[RIn, E, ROut] =
     new ZTransform[RIn, E, ROut] {
-      def effect[A](io: ZIO[RIn, E, A]): ZIO[ROut, E, A]         = io.provideSome(f)
-      def stream[A](io: ZStream[RIn, E, A]): ZStream[ROut, E, A] = io.provideSome(f)
+      def effect[A](io: ZIO[RIn, E, A]): ZIO[ROut, E, A]         = io.provideSomeEnvironment(f)
+      def stream[A](io: ZStream[RIn, E, A]): ZStream[ROut, E, A] = io.provideSomeEnvironment(f)
     }
 
   /** Provides the entire environment of a service (leaving only the context) */
-  def provideEnv[R, E, Context](
-      env: R
-  )(implicit union: Has.Union[R, Context]): ZTransform[R with Context, E, Context] =
-    provideSome(union.union(env, _))
+  def provideEnvironment[R, E, Context: Tag](
+      env: => ZEnvironment[R]
+  ): ZTransform[R with Context, E, Context] =
+    provideSomeEnvironment((ctx: ZEnvironment[Context]) => env.union[Context](ctx))
 
   /** Changes the Context type of the service from Context1 to Context2, by
     * applying an effectful function on the environment
     */
-  def transformContext[RIn, E, ContextIn <: Has[_]: Tag, ROut <: RIn, ContextOut](
+  def transformContext[RIn, E, ContextIn: Tag: IsNotIntersection, ROut <: RIn, ContextOut: Tag: IsNotIntersection](
       f: ContextOut => ZIO[ROut, E, ContextIn]
-  )(implicit ev: RIn with ContextOut <:< RIn with Has[_]): ZTransform[RIn with ContextIn, E, ROut with ContextOut] =
+  ): ZTransform[RIn with ContextIn, E, ROut with ContextOut] =
     new ZTransform[RIn with ContextIn, E, ROut with ContextOut] {
       def effect[A](io: ZIO[RIn with ContextIn, E, A]): ZIO[ROut with ContextOut, E, A] =
         ZIO
-          .accessZIO(f)
-          .flatMap(nc => io.provideSome(ev(_).union[ContextIn](nc)))
+          .environmentWithZIO { (env: ZEnvironment[ROut with ContextOut]) =>
+            f(env.get[ContextOut]).map(cin => env.add[ContextIn](cin))
+          }
+          .flatMap { env =>
+            io.provideEnvironment(env)
+          }
 
       def stream[A](io: ZStream[RIn with ContextIn, E, A]): ZStream[ROut with ContextOut, E, A] =
         ZStream
-          .fromZIO(ZIO.accessZIO(f))
-          .flatMap(nc => io.provideSome(ev(_).union[ContextIn](nc)))
+          .fromZIO(ZIO.environmentWithZIO { (env: ZEnvironment[ROut with ContextOut]) =>
+            f(env.get[ContextOut]).map(cin => env.add[ContextIn](cin))
+          })
+          .flatMap { env =>
+            io.provideEnvironment(env)
+          }
     }
 }

@@ -5,6 +5,7 @@ import io.grpc.MethodDescriptor
 import scalapb.zio_grpc.client.ZClientCall
 import zio.{Task, UIO, ZIO}
 import io.grpc.ManagedChannel
+import zio.ZEnvironment
 
 class ZChannel[-R](
     private[zio_grpc] val channel: ManagedChannel,
@@ -21,6 +22,6 @@ class ZChannel[-R](
 
   def shutdown(): Task[Unit] = ZIO.attempt(channel.shutdown()).unit
 
-  def provide(r: R): ZChannel[Any] =
-    new ZChannel[Any](channel, interceptors.map(_.provide(r)))
+  def provideEnvironment(r: ZEnvironment[R]): ZChannel[Any] =
+    new ZChannel[Any](channel, interceptors.map(_.provideEnvironment(r)))
 }
