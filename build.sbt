@@ -17,6 +17,7 @@ sonatypeProfileName := "com.thesamet"
 inThisBuild(
   List(
     organization := "com.thesamet.scalapb.zio-grpc",
+    version := "0.4.2-debug1",
     homepage := Some(url("https://github.com/scalapb/zio-grpc")),
     licenses := List(
       "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")

@@ -1,5 +1,6 @@
 package scalapb.zio_grpc.server
 
+import scalapb.zio_grpc.Helpers._
 import io.grpc.ServerCall.Listener
 import io.grpc.Status
 import zio._
@@ -34,40 +35,34 @@ object CallDriver {
   def unaryInputCallDriver[R, Req](
       runtime: Runtime[R],
       call: ZServerCall[_],
-      cancelled: Promise[Nothing, Unit],
-      completed: Promise[Status, Unit],
-      request: Promise[Nothing, Req],
       writeResponse: Req => ZIO[R, Status, Unit]
-  ): CallDriver[R, Req] =
+  ): CallDriver[R, Req] = {
+    val cancelled = scala.concurrent.Promise[Unit]()
+    val completed = scala.concurrent.Promise[Either[Status, Unit]]()
+    val request =  scala.concurrent.Promise[Req]()
     CallDriver(
       listener = new Listener[Req] {
         override def onCancel(): Unit =
-          runtime.unsafeRun(cancelled.succeed(()).unit)
+          cancelled.success(())
 
         override def onHalfClose(): Unit =
-          runtime.unsafeRun(completed.completeWith(ZIO.unit).unit)
+          completed.success(Right(()))
 
         override def onMessage(message: Req): Unit =
-          runtime.unsafeRun {
-            request.succeed(message).flatMap {
-              case false =>
-                completed
-                  .fail(Status.INTERNAL.withDescription("Too many requests"))
-                  .unit
-              case true  =>
-                ZIO.unit
-            }
+          if (!request.trySuccess(message)) {
+            completed.success(Left(Status.INTERNAL.withDescription("Too many requests")))
           }
       },
       run = (
         call.request(2) *>
-          completed.await *>
+          fromScalaPromiseE(completed) *>
           call.sendHeaders(new Metadata) *>
-          request.await >>= writeResponse
+          fromScalaPromise(request) >>= writeResponse
       ).onExit(ex => call.close(CallDriver.exitToStatus(ex), new Metadata).ignore)
         .ignore
-        .race(cancelled.await)
+        .race(fromScalaPromiseE(completed))
     )
+  }
 
   /** Creates a [[CallDriver]] for a request with a unary input.
     *
@@ -86,15 +81,9 @@ object CallDriver {
   ): ZIO[R, Nothing, CallDriver[R, Req]] =
     for {
       runtime   <- ZIO.runtime[R]
-      cancelled <- Promise.make[Nothing, Unit]
-      completed <- Promise.make[Status, Unit]
-      request   <- Promise.make[Nothing, Req]
     } yield unaryInputCallDriver(
       runtime,
       zioCall,
-      cancelled,
-      completed,
-      request,
       writeResponse(_, requestContext, zioCall)
     )
 
